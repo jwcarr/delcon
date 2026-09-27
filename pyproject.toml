@@ -1,0 +1,31 @@
+[project]
+name = "delcon"
+version = "0.1.0"
+description = "A method for reducing the coregistration keypoints between two images to only those that satisfy Delaunay consistency."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE.md"]
+authors = [
+    { name = "Jon Carr", email = "4412666+jwcarr@users.noreply.github.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.3",
+    "scipy>=1.18.1",
+]
+
+[project.scripts]
+delcon = "delcon:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "black>=26.5.1",
+]
+
+[tool.black]
+line-length = 100
