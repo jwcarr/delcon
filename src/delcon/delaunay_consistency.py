@@ -3,27 +3,19 @@ import numpy as np
 from scipy.spatial import Delaunay
 
 
-def calculate_equilateralness(triangle: np.ndarray) -> float:
-    """
-    Given a triangle (array of shape (3, 2)), returns an "equilateralness"
-    score in (0, 1], where 1 is equilateral and 0 is degenerate. The score
-    is essentially the ratio of the triangle's area to the area of an
-    equilateral triangle with the same perimeter.
-    """
-    assert len(triangle) == 3
-    side_lengths = [
-        np.linalg.norm(vertex1 - vertex2) for vertex1, vertex2 in combinations(triangle, 2)
-    ]
-    perimeter = sum(side_lengths)
-    semiperimeter = perimeter / 2.0
-    area = np.sqrt(
-        semiperimeter * np.prod([semiperimeter - side_length for side_length in side_lengths])
+
+def get_normalized_side_lengths(triangle: np.ndarray) -> np.ndarray:
+    assert triangle.shape == (3, 2)
+    side_lengths = np.array(
+        [np.linalg.norm(vertex1 - vertex2) for vertex1, vertex2 in combinations(triangle, 2)]
     )
-    area_of_an_equilateral_triangle_of_identical_perimeter = perimeter**2 / (12 * np.sqrt(3))
-    equilateralness = area / area_of_an_equilateral_triangle_of_identical_perimeter
-    if equilateralness <= 0:
-        return 0.0000000000001
-    return equilateralness
+    return side_lengths / side_lengths.sum()
+
+
+def calculate_shape_discrepancy(triangle1: np.ndarray, triangle2: np.ndarray) -> float:
+    normalized_side_lengths1 = get_normalized_side_lengths(triangle1)
+    normalized_side_lengths2 = get_normalized_side_lengths(triangle2)
+    return np.sqrt(((normalized_side_lengths1 - normalized_side_lengths2) ** 2).sum())
 
 
 def reduce_to_delaunay_consistency(
@@ -62,23 +54,22 @@ def reduce_to_delaunay_consistency(
     while True:
         if len(keypoints1) < 4:
             break  # Three or fewer keypoints; no point in further elimination.
-        total_divergence = np.zeros(len(keypoints1), dtype=float)
+        total_vertex_discrepancy = np.zeros(len(keypoints1), dtype=float)
         n_incident_triangles = np.zeros(len(keypoints1), dtype=int)
         triangulation = Delaunay(keypoints1)
         log.append((keypoints1, keypoints2, is_spurious, triangulation.simplices))
         for simplex in triangulation.simplices:
             triangle1 = keypoints1[simplex]
             triangle2 = keypoints2[simplex]
-            equilateralness1 = calculate_equilateralness(triangle1)
-            equilateralness2 = calculate_equilateralness(triangle2)
+            triangle_discrepancy = calculate_shape_discrepancy(triangle1, triangle2)
+            total_vertex_discrepancy[simplex] += triangle_discrepancy
             divergence = abs(np.log(equilateralness1 / equilateralness2))
-            total_divergence[simplex] += divergence
             n_incident_triangles[simplex] += 1
-        mean_divergence = total_divergence / n_incident_triangles
-        n_vertices_over_threshold = (mean_divergence > elimination_threshold).sum()
+        mean_vertex_discrepancy = total_vertex_discrepancy / n_incident_triangles
+        n_vertices_over_threshold = (mean_vertex_discrepancy > elimination_threshold).sum()
         if n_vertices_over_threshold == 0:
             break  # All divergences below threshold; exit loop.
-        most_divergent_vertex = np.argmax(mean_divergence)
+        most_divergent_vertex = np.argmax(mean_vertex_discrepancy)
         keypoints1 = np.delete(keypoints1, most_divergent_vertex, axis=0)
         keypoints2 = np.delete(keypoints2, most_divergent_vertex, axis=0)
         is_spurious = np.delete(is_spurious, most_divergent_vertex, axis=0)
