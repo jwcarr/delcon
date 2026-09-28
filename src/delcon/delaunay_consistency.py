@@ -1,7 +1,12 @@
+from collections import namedtuple
 from itertools import combinations
 import numpy as np
 from scipy.spatial import Delaunay
 
+KeypointReductionResult = namedtuple(
+    "KeypointReductionResult",
+    ["keypoints1", "keypoints2", "is_spurious", "initial_simplices", "final_simplices"],
+)
 
 
 def get_normalized_side_lengths(triangle: np.ndarray) -> np.ndarray:
@@ -23,7 +28,7 @@ def reduce_to_delaunay_consistency(
     keypoints2: np.ndarray,
     is_spurious: np.ndarray,
     elimination_threshold: float = 0.05,
-) -> tuple[np.ndarray, np.ndarray, list]:
+) -> KeypointReductionResult:
     """
     Given two sets of matched keypoints, removes the keypoint pairs that do
     not satisfy Delaunay consistency. For a keypoint pair to satisfy Delaunay
@@ -48,22 +53,24 @@ def reduce_to_delaunay_consistency(
     pairs is below a threshold (to allow for a little bit of noise and
     warping) or until the number of keypoint pairs is reduced below four.
     """
-    log: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = []
     assert len(keypoints1) == len(keypoints2)
     n_iterations = 0
+    initial_simplices: np.ndarray | None = None
     while True:
         if len(keypoints1) < 4:
+            if initial_simplices is not None:
+                triangulation = Delaunay(keypoints1)
             break  # Three or fewer keypoints; no point in further elimination.
         total_vertex_discrepancy = np.zeros(len(keypoints1), dtype=float)
         n_incident_triangles = np.zeros(len(keypoints1), dtype=int)
         triangulation = Delaunay(keypoints1)
-        log.append((keypoints1, keypoints2, is_spurious, triangulation.simplices))
+        if initial_simplices is None:
+            initial_simplices = triangulation.simplices
         for simplex in triangulation.simplices:
             triangle1 = keypoints1[simplex]
             triangle2 = keypoints2[simplex]
             triangle_discrepancy = calculate_shape_discrepancy(triangle1, triangle2)
             total_vertex_discrepancy[simplex] += triangle_discrepancy
-            divergence = abs(np.log(equilateralness1 / equilateralness2))
             n_incident_triangles[simplex] += 1
         mean_vertex_discrepancy = total_vertex_discrepancy / n_incident_triangles
         n_vertices_over_threshold = (mean_vertex_discrepancy > elimination_threshold).sum()
@@ -74,7 +81,13 @@ def reduce_to_delaunay_consistency(
         keypoints2 = np.delete(keypoints2, most_divergent_vertex, axis=0)
         is_spurious = np.delete(is_spurious, most_divergent_vertex, axis=0)
         n_iterations += 1
+    if initial_simplices is None:
+        final_simplices = None
+    else:
+        final_simplices = triangulation.simplices
     print(f"Iterations: {n_iterations}")
     print(f"Remaining points: {len(keypoints1)}")
     print(f"Remaining spurious points: {(is_spurious == True).sum()}")
-    return keypoints1, keypoints2, log
+    return KeypointReductionResult(
+        keypoints1, keypoints2, is_spurious, initial_simplices, final_simplices
+    )
