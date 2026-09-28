@@ -10,6 +10,10 @@ KeypointReductionResult = namedtuple(
 
 
 def get_normalized_side_lengths(triangle: np.ndarray) -> np.ndarray:
+    """
+    Returns the lengths of the triangle's sides, normalized by the triangle's
+    perimeter.
+    """
     assert triangle.shape == (3, 2)
     side_lengths = np.array(
         [np.linalg.norm(vertex1 - vertex2) for vertex1, vertex2 in combinations(triangle, 2)]
@@ -18,6 +22,10 @@ def get_normalized_side_lengths(triangle: np.ndarray) -> np.ndarray:
 
 
 def calculate_shape_discrepancy(triangle1: np.ndarray, triangle2: np.ndarray) -> float:
+    """
+    Returns the discrepancy between two triangles based on the difference in
+    corresponding normalized side lengths.
+    """
     normalized_side_lengths1 = get_normalized_side_lengths(triangle1)
     normalized_side_lengths2 = get_normalized_side_lengths(triangle2)
     return np.sqrt(((normalized_side_lengths1 - normalized_side_lengths2) ** 2).sum())
@@ -36,20 +44,21 @@ def reduce_to_delaunay_consistency(
     Delaunay triangulation) should retain their shape when imposed into image
     2. I.e., the triangular shape that exists between three landmarks in one
     image should remain the same when imposed onto the other image, even
-    under changes in rotation, scale, and translation.
+    under changes in rotation, scale, and position.
 
-    The algorithm constructs a Delaunay triangulation from the first set
-    of keypoints and imposes that triangulation onto the second set of
-    keypoints. For each triangle, we compute its "equilateralness" and the
-    equilateralness of the equivalent triangle in the second image. If the
-    two equilateralness scores are similar, the vertices of the triangle are
-    likely to be good keypoint matches. If the triangles are dissimilar, one
-    or more of its vertices are likely to be bad keypoint matches.
+    The algorithm constructs a Delaunay triangulation from the first set of
+    keypoints and imposes that triangulation onto the second set of
+    keypoints. For each triangle, we compute the discrepancy between the
+    shape of the triange in the first image and the shape of the equivalent
+    triangle in the second image. If the two triangles have similar shape,
+    the vertices of the triangle are likely to be good keypoint matches. If
+    the triangles are dissimilar, one or more of its vertices are likely to
+    be bad keypoint matches.
 
-    For each keypoint pair, the algorithm calculates the mean divergence of
+    For each keypoint pair, the algorithm calculates the mean discrepancy of
     its incident triangles. The keypoint pair with the highest mean
-    divergence is eliminated and the process starts over with a new Delaunay
-    triangulation. This continues until the mean divergence for all keypoint
+    discrepancy is eliminated and the process starts over with a new Delaunay
+    triangulation. This continues until the mean discrepancy for all keypoint
     pairs is below a threshold (to allow for a little bit of noise and
     warping) or until the number of keypoint pairs is reduced below four.
     """
